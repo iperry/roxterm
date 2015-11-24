@@ -2568,9 +2568,7 @@ static void roxterm_resize_window_handler(VteTerminal *vte,
         guint width, guint height, ROXTermData *roxterm)
 {
     MultiWin *win = roxterm_get_win(roxterm);
-    int pad_w, pad_h;
     GtkAllocation alloc;
-    int columns, rows;
 
     /* Can't compute size if not realized */
     if (!gtk_widget_get_realized(roxterm->widget))
@@ -2582,19 +2580,11 @@ static void roxterm_resize_window_handler(VteTerminal *vte,
     gtk_widget_get_allocation(roxterm->widget, &alloc);
     if (alloc.width == (int) width && alloc.height == (int) height)
         return;
-    /* Compute nearest grid size */
-    roxterm_get_vte_padding(roxterm, &pad_w, &pad_h);
-    columns = (int) (0.5 +
-            (double) (width - pad_w) /
-            (double) vte_terminal_get_char_width(vte));
-    rows = (int) (0.5 +
-            (double) (height - pad_h) /
-            (double) vte_terminal_get_char_height(vte));
     /* Only resize window now if this is current tab */
     if (roxterm->tab == multi_win_get_current_tab(win))
-        roxterm_set_vte_size(roxterm, vte, columns, rows);
+        roxterm_set_vte_size(roxterm, vte, width, height);
     else
-        vte_terminal_set_size(vte, columns, rows);
+        vte_terminal_set_size(vte, width, height);
 }
 
 static GtkWidget *create_radio_menu_item(MenuTree *mtree,

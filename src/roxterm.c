@@ -20,6 +20,8 @@
 #include "defns.h"
 
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/fcntl.h>
 #include <ctype.h>
 #include <errno.h>
 #include <pwd.h>
@@ -4388,6 +4390,48 @@ static void check_each_tab_running(MultiTab *tab, void *data)
     }
 }
 
+static int check_pid_has_children(pid_t pid) {
+    char buf[512];
+    int fd = 0;
+    int rc = 0;
+    ssize_t count;
+
+    snprintf(buf, sizeof buf, "/proc/%d/task/%d/children", pid, pid);
+    fd = open(buf, O_RDONLY);
+    if (fd == -1) {
+        printf("failed to open %s\n", buf);
+        return 0;
+    }
+
+    memset(buf, 0, sizeof buf);
+    count = read(fd, buf, sizeof buf);
+    if (count == -1) {
+        printf("read failed\n");
+        goto done;
+    }
+
+    if (!count) {
+        goto done;
+    }
+
+    rc = 1;
+done:
+    close(fd);
+    printf("Has children: %d\n", rc);
+    return rc;
+}
+
+static void check_tab_has_children_processes(MultiTab *tab, void *data)
+{
+    ROXTermData *roxterm = ((ROXTermData *) multi_tab_get_user_data(tab));
+
+    if (!roxterm) {
+        return;
+    }
+
+    *(int*)data = check_pid_has_children(roxterm->pid);
+}
+
 static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
         gpointer data)
 {
@@ -4400,6 +4444,8 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
     MultiWin *win = event ? data : NULL;
     ROXTermData *roxterm = event ? NULL : data;
     GtkWidget *ca_box;
+    gboolean has_children = FALSE;
+
 
     d.warn = global_options_lookup_int_with_default("warn_close", 3);
     d.only_running = global_options_lookup_int_with_default("only_warn_running",
@@ -4411,15 +4457,16 @@ static gboolean roxterm_delete_handler(GtkWindow *gtkwin, GdkEvent *event,
     {
         if (win)
         {
-            gboolean running = FALSE;
-
-            multi_win_foreach_tab(win, check_each_tab_running, &running);
-            if (!running)
+            multi_win_foreach_tab(win, check_tab_has_children_processes, &has_children);
+            if (!has_children) {
                 return FALSE;
+            }
         }
-        else if (!roxterm->running)
+        else
         {
-            return FALSE;
+            if (!check_pid_has_children(roxterm->pid)) {
+                return FALSE;
+            }
         }
     }
 
